@@ -11,6 +11,7 @@
 #include <iostream> // Include for I/O streams
 //#include <tgmath.h>
 #include <math.h>
+#include "MonoImage.cpp"
 
 
 
@@ -390,7 +391,6 @@ Blur(double sigma)
     }
   }
 }
-
 
 void R2Image::
 Harris(double sigma)
