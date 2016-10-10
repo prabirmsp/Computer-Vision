@@ -287,8 +287,8 @@ SobelX(void)
           Pixel(i,j) += oldR2Image.Pixel(i + lx, j + ly) * SobelWeight(lx, ly);
         }
       }
-      Pixel(i, j) += halfPixel; // add half a pixel for viewing purpose
-      Pixel(i, j).Clamp(); // clamp for viewing purpose
+      //Pixel(i, j) += halfPixel; // add half a pixel for viewing purpose
+      //Pixel(i, j).Clamp(); // clamp for viewing purpose
     }
   }
   // FILL IN IMPLEMENTATION HERE (REMOVE PRINT STATEMENT WHEN DONE)
@@ -309,8 +309,8 @@ SobelY(void)
           Pixel(i,j) += oldR2Image.Pixel(i + lx, j + ly) * SobelWeight(ly, lx);
         }
       }
-      Pixel(i, j) += halfPixel; // add half a pixel for viewing purpose
-      Pixel(i, j).Clamp();
+      //Pixel(i, j) += halfPixel; // add half a pixel for viewing purpose
+      //Pixel(i, j).Clamp();
     }
   }
   // FILL IN IMPLEMENTATION HERE (REMOVE PRINT STATEMENT WHEN DONE)
@@ -392,25 +392,23 @@ Blur(double sigma)
   }
 }
 
-void R2Image::
-Harris(double sigma)
-{
-    // Harris corner detector. Make use of the previously developed filters, such as the Gaussian blur filter
-	// Output should be 50% grey at flat regions, white at corners and black/dark near edges
-
+void ComputeHarrisImage(R2Image* orig, double sigma) {
+  int width = orig->Width();
+  int height = orig->Height();
 
   // Initialize the temporary images
-  R2Image Ix_sq(*this);
-  R2Image Iy_sq(*this);
+  R2Image Ix_sq(*orig);
+  R2Image Iy_sq(*orig);
   R2Image Ix_Iy(width, height);
 
   Ix_sq.SobelX();
   Iy_sq.SobelY();
 
+  R2Pixel ix, iy;
   for (int i = 0; i < width; i++) {
     for (int j = 0; j < height; j++) {
-      R2Pixel ix = Ix_sq[i][j];
-      R2Pixel iy = Iy_sq[i][j];
+      ix = Ix_sq[i][j];
+      iy = Iy_sq[i][j];
       Ix_Iy[i][j] = ix * iy;
       Ix_sq[i][j] = ix * ix;
       Iy_sq[i][j] = iy * iy;
@@ -418,22 +416,35 @@ Harris(double sigma)
   }
 
   // Blur (weighted average)
-  const double blurSigma = sigma;
-  Ix_sq.Blur(blurSigma);
-  Iy_sq.Blur(blurSigma);
-  Ix_Iy.Blur(blurSigma);
-
+  Ix_sq.Blur(sigma);
+  Iy_sq.Blur(sigma);
+  Ix_Iy.Blur(sigma);
+  R2Pixel grey(0.5,0.5,0.5,1);
   for (int i = 0; i < width; i++) {
     for (int j = 0; j < height; j++) {
-      SetPixel(i, j, (Ix_sq[i][j] * Iy_sq[i][j])
+      R2Pixel temp = (Ix_sq[i][j] * Iy_sq[i][j])
                     - (Ix_Iy[i][j] * Ix_Iy[i][j])
                     - (0.04 * (Ix_sq[i][j] + Iy_sq[i][j])
-                            * (Ix_sq[i][j] + Iy_sq[i][j])));
+                            * (Ix_sq[i][j] + Iy_sq[i][j]))
+                    + grey;
+      temp.Clamp();
+      orig->SetPixel(i, j, temp);
     }
   }
+}
+
+
+void R2Image::
+Harris(double sigma)
+{
+    // Harris corner detector. Make use of the previously developed filters, such as the Gaussian blur filter
+	// Output should be 50% grey at flat regions, white at corners and black/dark near edges
+  ComputeHarrisImage(this, sigma);
+
+
 
   // FILL IN IMPLEMENTATION HERE (REMOVE PRINT STATEMENT WHEN DONE)
-  fprintf(stderr, "Harris(%g) not implemented\n", sigma);
+  //fprintf(stderr, "Harris(%g) not implemented\n", sigma);
 }
 
 /*

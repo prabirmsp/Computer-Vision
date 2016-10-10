@@ -1,4 +1,4 @@
-
+#include <stdlib.h>
 class MonoImage {
 public:
   MonoImage(R2Image& image);
@@ -52,7 +52,7 @@ MonoImage(MonoImage& image) {
 
 MonoImage::
 ~MonoImage(void) {
-  if (pixels) delete pixels;
+  //if (pixels) free(pixels);
 }
 
 double* MonoImage::
