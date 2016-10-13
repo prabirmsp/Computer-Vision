@@ -12,14 +12,15 @@ public:
 private:
   int width;
   int height;
-  double* pixels;
+  double * pixels;
 };
 
 MonoImage::
 MonoImage(R2Image& image) {
   width = image.Width();
   height = image.Height();
-  pixels = (double *)malloc(sizeof(double) * width * height);
+  const int size = width * height;
+  pixels = new double[size];
   assert(pixels);
 
   double* c ;
@@ -41,7 +42,8 @@ MonoImage::
 MonoImage(MonoImage& image) {
   width = image.width;
   height = image.height;
-  pixels = (double *)malloc(sizeof(double) * width * height);
+  const int size = width * height;
+  pixels = new double[size];
   assert(pixels);
   for (int i = 0; i < width; i++) {
     for (int j = 0; j < height; j++) {
@@ -52,7 +54,7 @@ MonoImage(MonoImage& image) {
 
 MonoImage::
 ~MonoImage(void) {
-  //if (pixels) free(pixels);
+  
 }
 
 double* MonoImage::

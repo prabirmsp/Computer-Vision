@@ -12,6 +12,10 @@
 //#include <tgmath.h>
 #include <math.h>
 #include "MonoImage.cpp"
+#include <cmath>
+
+#include <queue>
+#include <vector>
 
 
 
@@ -392,9 +396,10 @@ Blur(double sigma)
   }
 }
 
-void ComputeHarrisImage(R2Image* orig, double sigma) {
+R2Image ComputeHarrisImage(R2Image* orig, double sigma) {
   int width = orig->Width();
   int height = orig->Height();
+  R2Image img(width,height);
 
   // Initialize the temporary images
   R2Image Ix_sq(*orig);
@@ -425,22 +430,96 @@ void ComputeHarrisImage(R2Image* orig, double sigma) {
       R2Pixel temp = (Ix_sq[i][j] * Iy_sq[i][j])
                     - (Ix_Iy[i][j] * Ix_Iy[i][j])
                     - (0.04 * (Ix_sq[i][j] + Iy_sq[i][j])
-                            * (Ix_sq[i][j] + Iy_sq[i][j]))
-                    + grey;
-      temp.Clamp();
-      orig->SetPixel(i, j, temp);
+                            * (Ix_sq[i][j] + Iy_sq[i][j]));
+      //              + grey;
+      //temp.Clamp();
+      img.SetPixel(i, j, temp);
+    }
+  }
+  return img;
+}
+
+class Point {
+public:
+  double val;
+  int i;
+  int j;
+
+  Point(double val, int i, int j);
+};
+
+Point::Point(double val, int i, int j)
+  : val(val),
+    i(i),
+    j(j)
+{
+
+}
+
+void mark (R2Image * image, Point p)  {
+  const int radius = 5;
+  R2Pixel red (1,0,0,1);
+  R2Pixel white (1, 1, 1, 1);
+  for (int i = -1* radius; i <= radius; i++) {
+    for (int j = -1* radius; j <= radius; j++) {
+      if(std::abs(i) < radius - 1 && std::abs(j) < radius - 1 )
+        image->SetPixel(p.i + i, p.j + j, red);
+      else
+        image->SetPixel(p.i + i, p.j + j, white);
     }
   }
 }
 
+struct ComparePoint {
+    bool operator()(Point const & p1, Point const & p2) {
+        // return "true" if "p1" is ordered before "p2", for example:
+        return p1.val < p2.val;
+    }
+};
 
 void R2Image::
 Harris(double sigma)
 {
     // Harris corner detector. Make use of the previously developed filters, such as the Gaussian blur filter
 	// Output should be 50% grey at flat regions, white at corners and black/dark near edges
-  ComputeHarrisImage(this, sigma);
+  R2Image harris = ComputeHarrisImage(this, sigma);
+  printf("Harris Image Computed\n");
 
+  std::priority_queue<Point, std::vector<Point>, ComparePoint> q;
+  bool valid[width][height];
+  for (int i = 0; i < width; i++) {
+    for (int j = 0; j < height; j++) {
+      valid[i][j] = true;
+    }
+  }
+
+  for (int i = 0; i < width; i++) {
+    for (int j = 0; j < height; j++) {
+      R2Pixel cur = harris.Pixel(i,j);
+      double sum = cur.Red() + cur.Green() + cur.Blue();
+      q.push(Point(sum, i, j));
+    }
+  }
+
+  printf("Pixels added to q\n");
+
+  const int invalidRadius = 10;
+  int pointCount = 0;
+  while(pointCount < 150) {
+    Point p = q.top();
+    if (valid[p.i][p.j]) {
+      mark(this, p);
+      for (int i = -1 * invalidRadius; i <= invalidRadius; i++) {
+        for (int j = -1 * invalidRadius; j <= invalidRadius; j++) {
+          int x = std::min(std::max(0, p.i + i), width);
+          int y = std::min(std::max(0, p.j + j), height);
+          valid[x][y] = false;
+        }
+      }
+      pointCount++;
+    }
+    q.pop();
+  }
 
 
   // FILL IN IMPLEMENTATION HERE (REMOVE PRINT STATEMENT WHEN DONE)
