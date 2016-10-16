@@ -439,36 +439,12 @@ R2Image ComputeHarrisImage(R2Image* orig, double sigma) {
   return img;
 }
 
-class Point {
-public:
-  double val;
-  int i;
-  int j;
+typedef struct Point {
+  int x;
+  int y;
+  float val;
+} Point;
 
-  Point(double val, int i, int j);
-};
-
-Point::Point(double val, int i, int j)
-  : val(val),
-    i(i),
-    j(j)
-{
-
-}
-
-void mark (R2Image * image, Point p)  {
-  const int radius = 5;
-  R2Pixel red (1,0,0,1);
-  R2Pixel white (1, 1, 1, 1);
-  for (int i = -1* radius; i <= radius; i++) {
-    for (int j = -1* radius; j <= radius; j++) {
-      if(std::abs(i) < radius - 1 && std::abs(j) < radius - 1 )
-        image->SetPixel(p.i + i, p.j + j, red);
-      else
-        image->SetPixel(p.i + i, p.j + j, white);
-    }
-  }
-}
 
 struct ComparePoint {
     bool operator()(Point const & p1, Point const & p2) {
@@ -477,14 +453,25 @@ struct ComparePoint {
     }
 };
 
-void R2Image::
-Harris(double sigma)
-{
-    // Harris corner detector. Make use of the previously developed filters, such as the Gaussian blur filter
-	// Output should be 50% grey at flat regions, white at corners and black/dark near edges
-  R2Image harris = ComputeHarrisImage(this, sigma);
-  printf("Harris Image Computed\n");
 
+void mark (R2Image * image, Point p)  {
+  const int radius = 5;
+  R2Pixel red (1,0,0,1);
+  R2Pixel white (1, 1, 1, 1);
+  for (int i = -1* radius; i <= radius; i++) {
+    for (int j = -1* radius; j <= radius; j++) {
+      if(std::abs(i) < radius - 1 && std::abs(j) < radius - 1 )
+        image->SetPixel(p.x + i, p.y + j, red);
+      else
+        image->SetPixel(p.x + i, p.y + j, white);
+    }
+  }
+}
+
+
+void featurePoints(R2Image* harris, std::vector<Point> *points) {
+  int width = harris->Width();
+  int height = harris->Height();
   std::priority_queue<Point, std::vector<Point>, ComparePoint> q;
   bool valid[width][height];
   for (int i = 0; i < width; i++) {
@@ -495,24 +482,26 @@ Harris(double sigma)
 
   for (int i = 0; i < width; i++) {
     for (int j = 0; j < height; j++) {
-      R2Pixel cur = harris.Pixel(i,j);
+      R2Pixel cur = harris->Pixel(i,j);
       double sum = cur.Red() + cur.Green() + cur.Blue();
-      q.push(Point(sum, i, j));
+      Point p;
+      p.x = i;
+      p.y = j;
+      p.val = sum;
+      q.push(p);
     }
   }
-
-  printf("Pixels added to q\n");
 
   const int invalidRadius = 10;
   int pointCount = 0;
   while(pointCount < 150) {
     Point p = q.top();
-    if (valid[p.i][p.j]) {
-      mark(this, p);
+    if (valid[p.x][p.y]) {
+      points->push_back(p);
       for (int i = -1 * invalidRadius; i <= invalidRadius; i++) {
         for (int j = -1 * invalidRadius; j <= invalidRadius; j++) {
-          int x = std::min(std::max(0, p.i + i), width);
-          int y = std::min(std::max(0, p.j + j), height);
+          int x = std::min(std::max(0, p.x + i), width - 1);
+          int y = std::min(std::max(0, p.y + j), height - 1);
           valid[x][y] = false;
         }
       }
@@ -520,10 +509,32 @@ Harris(double sigma)
     }
     q.pop();
   }
+}
 
+void R2Image::
+Harris(double sigma)
+{
+    // Harris corner detector. Make use of the previously developed filters, such as the Gaussian blur filter
+	// Output should be 50% grey at flat regions, white at corners and black/dark near edges
+  R2Image harris = ComputeHarrisImage(this, sigma);
+  printf("Harris Image Computed\n");
+
+  std::vector<Point> points(150);
+  Point * ps = (Point *) malloc(sizeof(Point) * 150);
+  assert(ps);
+  featurePoints(&harris, &points);
+
+  //for(unsigned int i = 0; i < points.size(); i++) {
+  //  mark(this, points[i]);
+  //}
 
   // FILL IN IMPLEMENTATION HERE (REMOVE PRINT STATEMENT WHEN DONE)
   //fprintf(stderr, "Harris(%g) not implemented\n", sigma);
+}
+
+void R2Image::
+trackMovement(R2Image * otherImage) {
+  *this = *otherImage;
 }
 
 /*
