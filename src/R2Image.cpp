@@ -555,20 +555,20 @@ Harris(double sigma)
   //fprintf(stderr, "Harris(%g) not implemented\n", sigma);
 }
 
-double computeSSD(R2Image& I_0, R2Image& I_1, Point p, int searchx, int searchy, const int ssdWindowRadius) {
-  R2Pixel sum(0,0,0,1);
+double computeSSD(MonoImage& I_0, MonoImage& I_1, Point p, int searchx, int searchy, const int ssdWindowRadius) {
+  double sum = 0;
   for (int i = -1 * ssdWindowRadius; i <= ssdWindowRadius; i++) {
     for (int j = -1 * ssdWindowRadius; j <= ssdWindowRadius; j++) {
       //int i0x = std::max(std::min(p.x + i, I_0.Width()), 0);
       //int i0y = std::max(std::min(p.y + j, I_0.Height()), 0);
       //int i1x = std::max(std::min(searchx + i, I_1.Width()), 0);
       //int i1y = std::max(std::min(searchy + j, I_1.Height()), 0);
-      R2Pixel diff = I_0.Pixel(p.x + i, p.y + j)
-                   - I_1.Pixel(searchx + i, searchy + j);
+      double diff = I_0[p.x + i][p.y + j]
+                   - I_1[searchx + i][searchy + j];
       sum += diff * diff;
     }
   }
-  return sum.Red() + sum.Green() + sum.Blue();
+  return sum;
 }
 
 void R2Image::
@@ -587,7 +587,17 @@ trackMovement(R2Image * otherImage) {
   std::vector<Point> points(numFeaturePoints);
   getFeaturePoints(&harris, points, numFeaturePoints, windowx / 2, windowy / 2);
 
+
+  MonoImage curMono(*this);
+  MonoImage otherMono(*otherImage);
+
   R2Image orig(*this);
+  for (int i = 0; i < width; i++) {
+    for (int j = 0; j < height; j++) {
+      double v = curMono[i][j];
+      orig.SetPixel(i, j, R2Pixel(v, v, v, 1));
+    }
+  }
   for (int i = 0; i < numFeaturePoints; i++) {
     mark(orig, points[i]);
   }
@@ -595,8 +605,6 @@ trackMovement(R2Image * otherImage) {
 
   printf("Completed\n");
 
-  MonoImage curMono(*this);
-  MonoImage otherMono(*otherImage);
 
   std::unordered_map<int, Point> matchedPoints(numFeaturePoints);
 
@@ -612,7 +620,7 @@ trackMovement(R2Image * otherImage) {
     best.val = infinity;
     for (int i = startx; i < endx; i++) {
       for (int j = starty; j < endy; j++) {
-        double ssd = computeSSD(*this, *otherImage, p, i, j, ssdWindowRadius);
+        double ssd = computeSSD(curMono, otherMono, p, i, j, ssdWindowRadius);
         if (ssd < best.val) {
           best.val = ssd;
           best.x = i;
