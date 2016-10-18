@@ -20,7 +20,7 @@ MonoImage(R2Image& image) {
   width = image.Width();
   height = image.Height();
   const int size = width * height;
-  pixels = new double[size];
+  pixels = (double *) malloc(sizeof(double) * size);
   assert(pixels);
 
   double* c ;
@@ -33,7 +33,7 @@ MonoImage(R2Image& image) {
       for (int k = 0; k < 3; k++) {
         sum += c[k];
       }
-      pixels[i*width + j] = sum / 3;
+      pixels[i*height + j] = sum / 3;
     }
   }
 }
@@ -47,27 +47,27 @@ MonoImage(MonoImage& image) {
   assert(pixels);
   for (int i = 0; i < width; i++) {
     for (int j = 0; j < height; j++) {
-      pixels[i*width + j] = image[i][j];
+      pixels[i*height + j] = image[i][j];
     }
   }
 }
 
 MonoImage::
 ~MonoImage(void) {
-  
+  if (pixels) free(pixels);
 }
 
 double* MonoImage::
 operator[](int x) {
-  return &pixels[x*width];
+  return &pixels[x*height];
 }
 
 double MonoImage::
 get(int x, int y) {
-  return pixels[x*width + y];
+  return pixels[x*height + y];
 }
 
 void MonoImage::
 set(int x, int y, double val) {
-  pixels[x* width + y] = val;
+  pixels[x* height + y] = val;
 }

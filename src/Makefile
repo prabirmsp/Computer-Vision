@@ -4,7 +4,7 @@
 
 
 
-# 
+#
 # List of source files
 #
 
@@ -18,7 +18,7 @@ IMGPRO_OBJS=$(IMGPRO_SRCS:.cpp=.o)
 #
 
 CC=g++
-CPPFLAGS=-Wall -I. -Ijpeg/linux-src -g -DUSE_JPEG 
+CPPFLAGS=-Wall -I. -Ijpeg/linux-src -g -DUSE_JPEG -std=c++11
 LDFLAGS=-g
 
 
@@ -50,18 +50,17 @@ LIBS=R2/libR2.a jpeg/libjpeg.a
 
 all: $(LIBS) imgpro
 
-imgpro: $(LIBS) $(IMGPRO_OBJS) 
+imgpro: $(LIBS) $(IMGPRO_OBJS)
 	    $(CC) -o imgpro $(CPPFLAGS) $(LDFLAGS) $(IMGPRO_OBJS) $(LIBS) -lm
 
-R2/libR2.a: 
+R2/libR2.a:
 	    cd R2; make
 
-jpeg/libjpeg.a: 
+jpeg/libjpeg.a:
 	    cd jpeg; make
 
 clean:
 	    ${RM} -f */*.a */*/*.a *.o */*.o */*/*.o imgpro imgpro.exe $(LIBS)
 
 distclean:  clean
-	    ${RM} -f *~ 
-
+	    ${RM} -f *~

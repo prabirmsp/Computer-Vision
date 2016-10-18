@@ -13,9 +13,11 @@
 #include <math.h>
 #include "MonoImage.cpp"
 #include <cmath>
+#include <limits>
 
 #include <queue>
 #include <vector>
+#include <unordered_map>
 
 
 
@@ -454,22 +456,45 @@ struct ComparePoint {
 };
 
 
-void mark (R2Image * image, Point p)  {
+void mark (R2Image &image, Point p)  {
   const int radius = 5;
   R2Pixel red (1,0,0,1);
   R2Pixel white (1, 1, 1, 1);
   for (int i = -1* radius; i <= radius; i++) {
     for (int j = -1* radius; j <= radius; j++) {
-      if(std::abs(i) < radius - 1 && std::abs(j) < radius - 1 )
-        image->SetPixel(p.x + i, p.y + j, red);
-      else
-        image->SetPixel(p.x + i, p.y + j, white);
+      int x = p.x + i;
+      int y = p.y + j;
+      if (x >= 0 && x < image.Width() && y >= 0 && y < image.Height()) {
+        if(std::abs(i) < radius - 1 && std::abs(j) < radius - 1 )
+          image.SetPixel(x, y, red);
+        else
+          image.SetPixel(x, y, white);
+      }
+    }
+  }
+}
+
+void line (R2Image &image, Point p1, Point p2)  {
+  R2Pixel red (1,0,0,1);
+  if (p1.x == p2.x) {
+    for (int i = std::min(p1.y, p2.y); i <= std::max(p1.y, p2.y); i++) {
+      image.SetPixel(p1.x, i, red);
+    }
+  } else {
+    double m = ((double) (p2.y - p1.y)) / ((double) (p2.x - p1.x));
+    for (int i = std::min(p1.x, p2.x); i <= std::max(p1.x, p2.x); i++) {
+      for (int j = std::min(p1.y, p2.y); j <= std::max(p1.y, p2.y); j++) {
+        double dist = abs((double)(j - p1.y) - (m * (i - p1.x)));
+        if (dist < 2.0) {
+          image.SetPixel(i, j, red);
+        }
+      }
     }
   }
 }
 
 
-void featurePoints(R2Image* harris, std::vector<Point> *points) {
+void getFeaturePoints(R2Image* harris, std::vector<Point> &points, int numFeaturePoints, int borderx, int bordery) {
   int width = harris->Width();
   int height = harris->Height();
   std::priority_queue<Point, std::vector<Point>, ComparePoint> q;
@@ -480,8 +505,8 @@ void featurePoints(R2Image* harris, std::vector<Point> *points) {
     }
   }
 
-  for (int i = 0; i < width; i++) {
-    for (int j = 0; j < height; j++) {
+  for (int i = borderx; i < width - borderx; i++) {
+    for (int j = bordery; j < height - bordery; j++) {
       R2Pixel cur = harris->Pixel(i,j);
       double sum = cur.Red() + cur.Green() + cur.Blue();
       Point p;
@@ -494,10 +519,11 @@ void featurePoints(R2Image* harris, std::vector<Point> *points) {
 
   const int invalidRadius = 10;
   int pointCount = 0;
-  while(pointCount < 150) {
+  while(pointCount < numFeaturePoints) {
     Point p = q.top();
     if (valid[p.x][p.y]) {
-      points->push_back(p);
+      points[pointCount] = p;
+      //printf("-%d,%d\n", p.x,p.y);
       for (int i = -1 * invalidRadius; i <= invalidRadius; i++) {
         for (int j = -1 * invalidRadius; j <= invalidRadius; j++) {
           int x = std::min(std::max(0, p.x + i), width - 1);
@@ -519,22 +545,94 @@ Harris(double sigma)
   R2Image harris = ComputeHarrisImage(this, sigma);
   printf("Harris Image Computed\n");
 
-  std::vector<Point> points(150);
-  Point * ps = (Point *) malloc(sizeof(Point) * 150);
-  assert(ps);
-  featurePoints(&harris, &points);
-
-  //for(unsigned int i = 0; i < points.size(); i++) {
-  //  mark(this, points[i]);
-  //}
-
+  const int numFeaturePoints = 150;
+  std::vector<Point> points(numFeaturePoints);
+  getFeaturePoints(&harris, points, numFeaturePoints, 0, 0);
+  for(unsigned int i = 0; i < numFeaturePoints; i++) {
+    mark(*this, points[i]);
+  }
   // FILL IN IMPLEMENTATION HERE (REMOVE PRINT STATEMENT WHEN DONE)
   //fprintf(stderr, "Harris(%g) not implemented\n", sigma);
 }
 
+double computeSSD(R2Image& I_0, R2Image& I_1, Point p, int searchx, int searchy, const int ssdWindowRadius) {
+  R2Pixel sum(0,0,0,1);
+  for (int i = -1 * ssdWindowRadius; i <= ssdWindowRadius; i++) {
+    for (int j = -1 * ssdWindowRadius; j <= ssdWindowRadius; j++) {
+      //int i0x = std::max(std::min(p.x + i, I_0.Width()), 0);
+      //int i0y = std::max(std::min(p.y + j, I_0.Height()), 0);
+      //int i1x = std::max(std::min(searchx + i, I_1.Width()), 0);
+      //int i1y = std::max(std::min(searchy + j, I_1.Height()), 0);
+      R2Pixel diff = I_0.Pixel(p.x + i, p.y + j)
+                   - I_1.Pixel(searchx + i, searchy + j);
+      sum += diff * diff;
+    }
+  }
+  return sum.Red() + sum.Green() + sum.Blue();
+}
+
 void R2Image::
 trackMovement(R2Image * otherImage) {
+
+  const int ssdWindowRadius = 10;
+  const int windowx = (int) (0.2f * width);
+  const int windowy = (int) (0.2f * height);
+
+  printf("Computing Harris Image... ");
+  R2Image harris = ComputeHarrisImage(this, 2);
+  printf("Completed\n");
+
+  printf("Finding Feature Points... ");
+  const int numFeaturePoints = 10;
+  std::vector<Point> points(numFeaturePoints);
+  getFeaturePoints(&harris, points, numFeaturePoints, windowx / 2, windowy / 2);
+
+  R2Image orig(*this);
+  for (int i = 0; i < numFeaturePoints; i++) {
+    mark(orig, points[i]);
+  }
+  orig.WriteJPEG("../output/initpoints.jpg");
+
+  printf("Completed\n");
+
+  MonoImage curMono(*this);
+  MonoImage otherMono(*otherImage);
+
+  std::unordered_map<int, Point> matchedPoints(numFeaturePoints);
+
+  const double infinity = std::numeric_limits<double>::infinity();
+  for(unsigned int ip = 0; ip < numFeaturePoints; ip++) {
+    printf("Tracking points... %d%%", ip * 100 / numFeaturePoints);
+    Point p = points[ip];
+    int startx = std::max(ssdWindowRadius, p.x - (windowx / 2));
+    int starty = std::max(ssdWindowRadius, p.y - (windowy / 2));
+    int endx = std::min(otherImage->Width() - ssdWindowRadius, p.x + (windowx / 2));
+    int endy = std::min(otherImage->Height() - ssdWindowRadius, p.y + (windowy / 2));
+    Point best;
+    best.val = infinity;
+    for (int i = startx; i < endx; i++) {
+      for (int j = starty; j < endy; j++) {
+        double ssd = computeSSD(*this, *otherImage, p, i, j, ssdWindowRadius);
+        if (ssd < best.val) {
+          best.val = ssd;
+          best.x = i;
+          best.y = j;
+        }
+      }
+    }
+    if(best.val != infinity)
+      matchedPoints[ip] = best;
+    std::cout<<'\r';
+    std::cout.flush();
+  }
+  printf("Tracking Points... Completed\n");
   *this = *otherImage;
+  for (int i = 0; i < numFeaturePoints; i++) {
+    if (matchedPoints.count(i) != 0) {
+      line(*this, points[i], matchedPoints[i]);
+      mark(*this, matchedPoints[i]);
+    }
+  }
 }
 
 /*
