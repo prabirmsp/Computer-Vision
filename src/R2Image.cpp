@@ -573,8 +573,10 @@ double computeSSD(MonoImage& I_0, MonoImage& I_1, Point p, int searchx, int sear
 
 void R2Image::
 trackMovement(R2Image * otherImage) {
-
-  const int ssdWindowRadius = 10;
+  // Options to change
+  const int sigma = 2;
+  const int numFeaturePoints = 100;
+  const int ssdWindowRadius = 6 * sigma + 1;
   const int windowx = (int) (0.2f * width);
   const int windowy = (int) (0.2f * height);
 
@@ -583,32 +585,28 @@ trackMovement(R2Image * otherImage) {
   printf("Completed\n");
 
   printf("Finding Feature Points... ");
-  const int numFeaturePoints = 10;
   std::vector<Point> points(numFeaturePoints);
   getFeaturePoints(&harris, points, numFeaturePoints, windowx / 2, windowy / 2);
-
+  printf("Completed\n");
 
   MonoImage curMono(*this);
   MonoImage otherMono(*otherImage);
 
-  R2Image orig(*this);
-  for (int i = 0; i < width; i++) {
-    for (int j = 0; j < height; j++) {
-      double v = curMono[i][j];
-      orig.SetPixel(i, j, R2Pixel(v, v, v, 1));
-    }
-  }
-  for (int i = 0; i < numFeaturePoints; i++) {
-    mark(orig, points[i]);
-  }
-  orig.WriteJPEG("../output/initpoints.jpg");
-
-  printf("Completed\n");
-
+  // R2Image orig(*this);
+  // for (int i = 0; i < width; i++) {
+  //   for (int j = 0; j < height; j++) {
+  //     double v = curMono[i][j];
+  //     orig.SetPixel(i, j, R2Pixel(v, v, v, 1));
+  //   }
+  // }
+  // for (int i = 0; i < numFeaturePoints; i++) {
+  //   mark(orig, points[i]);
+  // }
+  // orig.WriteJPEG("../output/initpoints.jpg");
 
   std::unordered_map<int, Point> matchedPoints(numFeaturePoints);
-
   const double infinity = std::numeric_limits<double>::infinity();
+
   for(unsigned int ip = 0; ip < numFeaturePoints; ip++) {
     printf("Tracking points... %d%%", ip * 100 / numFeaturePoints);
     Point p = points[ip];
@@ -636,7 +634,7 @@ trackMovement(R2Image * otherImage) {
   printf("Tracking Points... Completed\n");
   *this = *otherImage;
   for (int i = 0; i < numFeaturePoints; i++) {
-    if (matchedPoints.count(i) != 0) {
+    if (matchedPoints.count(i) > 0) {
       line(*this, points[i], matchedPoints[i]);
       mark(*this, matchedPoints[i]);
     }
