@@ -18,7 +18,8 @@
 #include <queue>
 #include <vector>
 #include <unordered_map>
-
+#include <cstdlib>
+#include <ctime>
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -569,7 +570,7 @@ void R2Image::
 trackMovementRansac(R2Image * otherImage) {
   // Options to change
   const int sigma = 2;
-  const int numFeaturePoints = 50;
+  const int numFeaturePoints = 100;
   const int ssdWindowRadius = 6 * sigma + 1;
   const int windowx = (int) (0.2f * width);
   const int windowy = (int) (0.2f * height);
@@ -616,14 +617,15 @@ trackMovementRansac(R2Image * otherImage) {
   printf("Tracking Points... Completed\n");
   *this = *otherImage;
 
-  const int numIterations = 50;
+  const int numIterations = 100;
   const int numSubsetPoints = 4;
   const double acceptThreshold = 5;
 
   int bestNumMatches = -1;
-  int bestSubset[numSubsetPoints];
   double bestAverageDx = 0;
   double bestAverageDy = 0;
+
+  //srand(time(NULL));
 
   for (int iteration = 0; iteration < numIterations; iteration++) {
     int subset [numSubsetPoints];
@@ -633,28 +635,25 @@ trackMovementRansac(R2Image * otherImage) {
       do {
         subset[i] = std::rand() % numFeaturePoints;
       } while (matchedPoints.count(subset[i]) == 0);
-      averageDx += matchedPoints[i].x - points[i].x;
-      averageDy += matchedPoints[i].y - points[i].y;
+      averageDx += matchedPoints[subset[i]].x - points[subset[i]].x;
+      averageDy += matchedPoints[subset[i]].y - points[subset[i]].y;
     }
     averageDx /= numSubsetPoints;
     averageDy /= numSubsetPoints;
 
     int numMatches = 0;
     for (int i = 0; i < numFeaturePoints; i++) {
-      if (matchedPoints.count(i) > 0) {
-        double deltax = matchedPoints[i].x - points[i].x;
-        double deltay = matchedPoints[i].y - points[i].y;
+      if (matchedPoints.count(subset[i]) > 0) {
+        double deltax = matchedPoints[subset[i]].x - points[subset[i]].x;
+        double deltay = matchedPoints[subset[i]].y - points[subset[i]].y;
         if (abs(deltax - averageDx) <= acceptThreshold
          && abs(deltay - averageDy) <= acceptThreshold) {
            numMatches ++;
          }
       }
     }
-
     if (numMatches > bestNumMatches) {
       bestNumMatches = numMatches;
-      for (int i = 0; i < numSubsetPoints; i++)
-        bestSubset[i] = subset[i];
       bestAverageDx = averageDx;
       bestAverageDy = averageDy;
     }
