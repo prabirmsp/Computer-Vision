@@ -456,9 +456,8 @@ struct ComparePoint {
 };
 
 
-void mark (R2Image &image, Point p)  {
+void mark (R2Image &image, Point p, R2Pixel color)  {
   const int radius = 5;
-  R2Pixel red (1,0,0,1);
   R2Pixel white (1, 1, 1, 1);
   for (int i = -1* radius; i <= radius; i++) {
     for (int j = -1* radius; j <= radius; j++) {
@@ -466,7 +465,7 @@ void mark (R2Image &image, Point p)  {
       int y = p.y + j;
       if (x >= 0 && x < image.Width() && y >= 0 && y < image.Height()) {
         if(std::abs(i) < radius - 1 && std::abs(j) < radius - 1 )
-          image.SetPixel(x, y, red);
+          image.SetPixel(x, y, color);
         else
           image.SetPixel(x, y, white);
       }
@@ -474,11 +473,10 @@ void mark (R2Image &image, Point p)  {
   }
 }
 
-void line (R2Image &image, Point p1, Point p2)  {
-  R2Pixel red (1,0,0,1);
+void line (R2Image &image, Point p1, Point p2, R2Pixel color)  {
   if (p1.x == p2.x) {
     for (int i = std::min(p1.y, p2.y); i <= std::max(p1.y, p2.y); i++) {
-      image.SetPixel(p1.x, i, red);
+      image.SetPixel(p1.x, i, color);
     }
   } else {
     double m = ((double) (p2.y - p1.y)) / ((double) (p2.x - p1.x));
@@ -486,7 +484,7 @@ void line (R2Image &image, Point p1, Point p2)  {
       for (int j = std::min(p1.y, p2.y); j <= std::max(p1.y, p2.y); j++) {
         double dist = abs((double)(j - p1.y) - (m * (i - p1.x)));
         if (dist < 2.0) {
-          image.SetPixel(i, j, red);
+          image.SetPixel(i, j, color);
         }
       }
     }
@@ -549,7 +547,7 @@ Harris(double sigma)
   std::vector<Point> points(numFeaturePoints);
   getFeaturePoints(&harris, points, numFeaturePoints, 0, 0);
   for(unsigned int i = 0; i < numFeaturePoints; i++) {
-    mark(*this, points[i]);
+    mark(*this, points[i], R2Pixel(1, 0, 0, 1));
   }
   // FILL IN IMPLEMENTATION HERE (REMOVE PRINT STATEMENT WHEN DONE)
   //fprintf(stderr, "Harris(%g) not implemented\n", sigma);
@@ -559,10 +557,6 @@ double computeSSD(MonoImage& I_0, MonoImage& I_1, Point p, int searchx, int sear
   double sum = 0;
   for (int i = -1 * ssdWindowRadius; i <= ssdWindowRadius; i++) {
     for (int j = -1 * ssdWindowRadius; j <= ssdWindowRadius; j++) {
-      //int i0x = std::max(std::min(p.x + i, I_0.Width()), 0);
-      //int i0y = std::max(std::min(p.y + j, I_0.Height()), 0);
-      //int i1x = std::max(std::min(searchx + i, I_1.Width()), 0);
-      //int i1y = std::max(std::min(searchy + j, I_1.Height()), 0);
       double diff = I_0[p.x + i][p.y + j]
                    - I_1[searchx + i][searchy + j];
       sum += diff * diff;
@@ -570,6 +564,120 @@ double computeSSD(MonoImage& I_0, MonoImage& I_1, Point p, int searchx, int sear
   }
   return sum;
 }
+
+void R2Image::
+trackMovementRansac(R2Image * otherImage) {
+  // Options to change
+  const int sigma = 2;
+  const int numFeaturePoints = 50;
+  const int ssdWindowRadius = 6 * sigma + 1;
+  const int windowx = (int) (0.2f * width);
+  const int windowy = (int) (0.2f * height);
+
+  printf("Computing Harris Image... ");
+  R2Image harris = ComputeHarrisImage(this, 2);
+  printf("Completed\n");
+
+  printf("Finding Feature Points... ");
+  std::vector<Point> points(numFeaturePoints);
+  getFeaturePoints(&harris, points, numFeaturePoints, 0, 0);
+  printf("Completed\n");
+
+  MonoImage curMono(*this);
+  MonoImage otherMono(*otherImage);
+
+  std::unordered_map<int, Point> matchedPoints(numFeaturePoints);
+  const double infinity = std::numeric_limits<double>::infinity();
+
+  for(unsigned int ip = 0; ip < numFeaturePoints; ip++) {
+    printf("Tracking points... %d%%", ip * 100 / numFeaturePoints);
+    Point p = points[ip];
+    int startx = std::max(ssdWindowRadius, p.x - (windowx / 2));
+    int starty = std::max(ssdWindowRadius, p.y - (windowy / 2));
+    int endx = std::min(otherImage->Width() - ssdWindowRadius, p.x + (windowx / 2));
+    int endy = std::min(otherImage->Height() - ssdWindowRadius, p.y + (windowy / 2));
+    Point best;
+    best.val = infinity;
+    for (int i = startx; i < endx; i++) {
+      for (int j = starty; j < endy; j++) {
+        double ssd = computeSSD(curMono, otherMono, p, i, j, ssdWindowRadius);
+        if (ssd < best.val) {
+          best.val = ssd;
+          best.x = i;
+          best.y = j;
+        }
+      }
+    }
+    if(best.val != infinity)
+      matchedPoints[ip] = best;
+    std::cout<<'\r';
+    std::cout.flush();
+  }
+  printf("Tracking Points... Completed\n");
+  *this = *otherImage;
+
+  const int numIterations = 50;
+  const int numSubsetPoints = 4;
+  const double acceptThreshold = 5;
+
+  int bestNumMatches = -1;
+  int bestSubset[numSubsetPoints];
+  double bestAverageDx = 0;
+  double bestAverageDy = 0;
+
+  for (int iteration = 0; iteration < numIterations; iteration++) {
+    int subset [numSubsetPoints];
+    double averageDx = 0;
+    double averageDy = 0;
+    for (int i = 0; i < numSubsetPoints; i++) {
+      do {
+        subset[i] = std::rand() % numFeaturePoints;
+      } while (matchedPoints.count(subset[i]) == 0);
+      averageDx += matchedPoints[i].x - points[i].x;
+      averageDy += matchedPoints[i].y - points[i].y;
+    }
+    averageDx /= numSubsetPoints;
+    averageDy /= numSubsetPoints;
+
+    int numMatches = 0;
+    for (int i = 0; i < numFeaturePoints; i++) {
+      if (matchedPoints.count(i) > 0) {
+        double deltax = matchedPoints[i].x - points[i].x;
+        double deltay = matchedPoints[i].y - points[i].y;
+        if (abs(deltax - averageDx) <= acceptThreshold
+         && abs(deltay - averageDy) <= acceptThreshold) {
+           numMatches ++;
+         }
+      }
+    }
+
+    if (numMatches > bestNumMatches) {
+      bestNumMatches = numMatches;
+      for (int i = 0; i < numSubsetPoints; i++)
+        bestSubset[i] = subset[i];
+      bestAverageDx = averageDx;
+      bestAverageDy = averageDy;
+    }
+  }
+
+  const R2Pixel red(1, 0, 0, 1);
+  const R2Pixel green(0, 1, 0, 1);
+  for (int i = 0; i < numFeaturePoints; i++) {
+    if (matchedPoints.count(i) > 0) {
+      double deltax = matchedPoints[i].x - points[i].x;
+      double deltay = matchedPoints[i].y - points[i].y;
+      if (abs(deltax - bestAverageDx) <= acceptThreshold
+       && abs(deltay - bestAverageDy) <= acceptThreshold) {
+         line(*this, points[i], matchedPoints[i], green);
+         mark(*this, matchedPoints[i], green);
+       } else{
+         line(*this, points[i], matchedPoints[i], red);
+         mark(*this, matchedPoints[i], red);
+       }
+    }
+  }
+}
+
 
 void R2Image::
 trackMovement(R2Image * otherImage) {
@@ -633,10 +741,11 @@ trackMovement(R2Image * otherImage) {
   }
   printf("Tracking Points... Completed\n");
   *this = *otherImage;
+  R2Pixel red (1, 0, 0, 1);
   for (int i = 0; i < numFeaturePoints; i++) {
     if (matchedPoints.count(i) > 0) {
-      line(*this, points[i], matchedPoints[i]);
-      mark(*this, matchedPoints[i]);
+      line(*this, points[i], matchedPoints[i], red);
+      mark(*this, matchedPoints[i], red);
     }
   }
 }

@@ -220,6 +220,13 @@ main(int argc, char **argv)
       image->trackMovement(other_image);
       delete other_image;
     }
+    else if (!strcmp(*argv, "-ransac")) {
+      CheckOption(*argv, argc, 2);
+      R2Image *other_image = new R2Image(argv[1]);
+      argv += 2, argc -= 2;
+      image->trackMovementRansac(other_image);
+      delete other_image;
+    }
     else if (!strcmp(*argv, "-matchHomography")) {
       CheckOption(*argv, argc, 2);
       R2Image *other_image = new R2Image(argv[1]);
