@@ -77,6 +77,7 @@ class R2Image {
   // further operations
   void trackMovement(R2Image * otherImage);
   void trackMovementRansac(R2Image * otherImage);
+  void dlt();
   void blendOtherImageTranslated(R2Image * otherImage);
   void blendOtherImageHomography(R2Image * otherImage);
 

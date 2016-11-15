@@ -43,6 +43,7 @@ static char options[] =
 "  -brightness <real:factor>\n"
 "  -blur <real:sigma>\n"
 "  -sharpen \n"
+"  -dlt \n"
 "  -trackMovement <file:other_image>\n"
 "  -matchTranslation <file:other_image>\n"
 "  -matchHomography <file:other_image>\n";
@@ -140,7 +141,13 @@ main(int argc, char **argv)
 	  image->svdTest();
 	  return 0;
     }
+    else if (!strcmp(argv[i], "-dlt")) {
+        R2Image *image = new R2Image();
+  	  image->dlt();
+  	  return 0;
+      }
   }
+  
 
   // Read input and output image filenames
   if (argc < 3)  ShowUsage();

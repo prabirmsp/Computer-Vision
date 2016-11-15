@@ -764,6 +764,59 @@ int SharpenKernel(int x, int y) {
 }
 
 void R2Image::
+dlt() {
+  R2Point points[4][2] =
+    {{ R2Point(0,0), R2Point(1, 2)},
+     { R2Point(1,0), R2Point(1,1)},
+     { R2Point(1,1), R2Point(3,1)},
+     { R2Point(0,1), R2Point(3,2)}};
+  double** leq = dmatrix(1, 8, 1, 9);
+  for (int i = 1; i <= 4; i++) {
+    // first line
+    leq[2*i-1][1] = 0;
+    leq[2*i-1][2] = 0;
+    leq[2*i-1][3] = 0;
+    leq[2*i-1][4] = -1 * points[i-1][0][0];
+    leq[2*i-1][5] = -1 * points[i-1][0][1];
+    leq[2*i-1][6] = -1;
+    leq[2*i-1][7] = points[i-1][1][1] * points[i-1][0][0];
+    leq[2*i-1][8] = points[i-1][1][1] * points[i-1][0][1];
+    leq[2*i-1][9] = points[i-1][1][1];
+    // second line
+    leq[2*i][1] = points[i-1][0][0];
+    leq[2*i][2] = points[i-1][0][1];
+    leq[2*i][3] = 1;
+    leq[2*i][4] = 0;
+    leq[2*i][5] = 0;
+    leq[2*i][6] = 0;
+    leq[2*i][7] = -1 * points[i-1][0][0] * points[i-1][1][0];
+    leq[2*i][8] = -1 * points[i-1][1][0] * points[i-1][0][1];
+    leq[2*i][9] = -1 * points[i-1][1][0];
+  }
+
+  double singularValues[10];
+	double** nullspaceMatrix = dmatrix(1,9,1,9);
+	svdcmp(leq, 8, 9, singularValues, nullspaceMatrix);
+
+  // find the smallest singular value:
+  int smallestIndex = 1;
+  for(int i=2;i<10;i++) if(singularValues[i]<singularValues[smallestIndex]) smallestIndex=i;
+  printf("Singular Values:\n");
+  for(int i = 1; i < 10; i++) {
+    printf("%2.2lf\t", singularValues[i]);
+  }
+  printf("Smallest singular value: %lf i:%d\n", singularValues[smallestIndex], smallestIndex);
+
+  printf("Matrix H:\n");
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      printf("%2.2lf\t", nullspaceMatrix[i*3+j+1][smallestIndex]);
+    }
+    printf("\n");
+  }
+}
+
+void R2Image::
 Sharpen()
 {
   // Sharpen an image using a linear filter. Use a kernel of your choosing.
