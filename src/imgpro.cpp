@@ -43,8 +43,10 @@ static char options[] =
 "  -brightness <real:factor>\n"
 "  -blur <real:sigma>\n"
 "  -sharpen \n"
-"  -dlt \n"
 "  -trackMovement <file:other_image>\n"
+"  -ransac \n"
+"  -dltRansac \n"
+"  -dltTest\n"
 "  -matchTranslation <file:other_image>\n"
 "  -matchHomography <file:other_image>\n";
 
@@ -137,17 +139,16 @@ main(int argc, char **argv)
       ShowUsage();
     }
 	if (!strcmp(argv[i], "-svdTest")) {
-      R2Image *image = new R2Image();
+    R2Image *image = new R2Image();
 	  image->svdTest();
 	  return 0;
-    }
-    else if (!strcmp(argv[i], "-dlt")) {
-        R2Image *image = new R2Image();
-  	  image->dlt();
-  	  return 0;
-      }
+  } else	if (!strcmp(argv[i], "-dltTest")) {
+    R2Image *image = new R2Image();
+	  image->dltTest();
+	  return 0;
   }
-  
+}
+
 
   // Read input and output image filenames
   if (argc < 3)  ShowUsage();
@@ -232,6 +233,13 @@ main(int argc, char **argv)
       R2Image *other_image = new R2Image(argv[1]);
       argv += 2, argc -= 2;
       image->trackMovementRansac(other_image);
+      delete other_image;
+    }
+    else if (!strcmp(*argv, "-dltRansac")) {
+      CheckOption(*argv, argc, 2);
+      R2Image *other_image = new R2Image(argv[1]);
+      argv += 2, argc -= 2;
+      image->trackMovementDltRansac(other_image);
       delete other_image;
     }
     else if (!strcmp(*argv, "-matchHomography")) {

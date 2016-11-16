@@ -75,9 +75,10 @@ class R2Image {
   void Sharpen(void);
 
   // further operations
+  void dltTest();
   void trackMovement(R2Image * otherImage);
   void trackMovementRansac(R2Image * otherImage);
-  void dlt();
+  void trackMovementDltRansac(R2Image * otherImage);
   void blendOtherImageTranslated(R2Image * otherImage);
   void blendOtherImageHomography(R2Image * otherImage);
 
