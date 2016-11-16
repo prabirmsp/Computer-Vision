@@ -582,7 +582,8 @@ void  track(R2Image * thisImage, R2Image * otherImage, int numFeaturePoints, std
   printf("Completed\n");
 
   printf("Finding Feature Points... ");
-  getFeaturePoints(&harris, points, numFeaturePoints, windowx / 2, windowy / 2);
+  getFeaturePoints(&harris, points, numFeaturePoints, 0, 0);
+  //getFeaturePoints(&harris, points, numFeaturePoints, windowx / 2, windowy / 2);
   printf("Completed\n");
 
   MonoImage curMono(*thisImage);
