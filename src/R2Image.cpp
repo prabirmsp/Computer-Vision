@@ -582,8 +582,8 @@ void  track(R2Image * thisImage, R2Image * otherImage, int numFeaturePoints, std
   printf("Completed\n");
 
   printf("Finding Feature Points... ");
-  getFeaturePoints(&harris, points, numFeaturePoints, 0, 0);
-  //getFeaturePoints(&harris, points, numFeaturePoints, windowx / 2, windowy / 2);
+  //getFeaturePoints(&harris, points, numFeaturePoints, 0, 0);
+  getFeaturePoints(&harris, points, numFeaturePoints, windowx / 2, windowy / 2);
   printf("Completed\n");
 
   MonoImage curMono(*thisImage);
@@ -873,22 +873,16 @@ int rounddtoi (double x) {
   return (int) (x + 0.5);
 }
 
-void R2Image::
-trackMovementDltRansac(R2Image * otherImage) {
 
-  const int numFeaturePoints = 100;
+void calculateHomography(R2Image * thisImage, R2Image * otherImage, int numFeaturePoints, double acceptThreshold, std::vector<Point> &points, std::unordered_map<int,Point> &matchedPoints, double * bestH) {
 
-  std::vector<Point> points(numFeaturePoints);
-  std::unordered_map<int, Point> matchedPoints(numFeaturePoints);
-  track(this, otherImage, numFeaturePoints, points, matchedPoints);
-  *this = *otherImage;
+  track(thisImage, otherImage, numFeaturePoints, points, matchedPoints);
+  *thisImage = *otherImage;
 
   const int numIterations = 100;
   const int numSubsetPoints = 4;
-  const double acceptThreshold = 5; // pixels
 
   int bestNumMatches = -1;
-  double bestH [9];
 
   for (int iteration = 0; iteration < numIterations; iteration++) {
     int subset [numSubsetPoints];
@@ -919,6 +913,19 @@ trackMovementDltRansac(R2Image * otherImage) {
         bestH[i] = H[i];
     }
   }
+
+
+}
+
+void R2Image::
+trackMovementDltRansac(R2Image * otherImage) {
+  const int numFeaturePoints = 100;
+  const double acceptThreshold = 5; // pixels
+  double bestH[9];
+
+  std::vector<Point> points(numFeaturePoints);
+  std::unordered_map<int, Point> matchedPoints(numFeaturePoints);
+  calculateHomography(this, otherImage, numFeaturePoints, acceptThreshold, points, matchedPoints, bestH);
 
   const R2Pixel red(1, 0, 0, 1);
   const R2Pixel green(0, 1, 0, 1);
