@@ -873,6 +873,66 @@ int rounddtoi (double x) {
   return (int) (x + 0.5);
 }
 
+void applyH(double * H, Point &p, double * newp) {
+  double w = H[6] * p.x + H[7] * p.y + H[8];
+  newp[0] = (H[0] * p.x + H[1] * p.y + H[2]) / w;
+  newp[1] = (H[3] * p.x + H[4] * p.y + H[5]) / w;
+}
+void applyH(double * H, int x, int y, double * newp) {
+  Point p;
+  p.x = x;
+  p.y = y;
+  applyH(H, p, newp);
+}
+
+double det(double * H, int a, int b, int c, int d) {
+  return (H[a] * H[d]) - (H[b] * H[c]);
+}
+double det3(double *H) {
+  return (H[0] * det(H, 4, 5, 7, 8)) -
+                (H[1] * det(H, 3, 5, 6, 8)) +
+                (H[2] * det(H, 3, 4, 6, 7));
+}
+// http://stackoverflow.com/questions/983999/simple-3x3-matrix-inverse-code-c
+void matrixMinors (double * H, double * HInverse) {
+  for(int i = 0; i < 9 ; i++) {
+    int row = i / 3;
+    int col = i % 3;
+    int minor[4];
+    int count = 0;
+    for(int j = 0; j < 9; j++) {
+        if (j / 3 != row && j % 3 != col) {
+          minor[count++] = j;
+        }
+    }
+    HInverse[i] = det(H, minor[0], minor[1], minor[2], minor[3]);
+  }
+}
+void cofactors(double* HInverse) {
+  for (int i = 0; i < 9; i++) {
+    if (i == 1 ||i == 3 ||i == 5 ||i == 7 )
+      HInverse[i] *= -1;
+  }
+}
+void HSwap (double * H, int a, int b) {
+  double temp = H[a];
+  H[a] = H[b];
+  H[b] = temp;
+}
+void adjugate(double * HInverse) {
+  HSwap(HInverse, 1, 3);
+  HSwap(HInverse, 2, 6);
+  HSwap(HInverse, 7, 5);
+}
+void invertH(double *H, double * HInverse) {
+  matrixMinors(H, HInverse);
+  cofactors(HInverse);
+  adjugate(HInverse);
+  double invDet = 1 / det3(H);
+  for (int i = 0; i < 9; i++) {
+    HInverse[i] *= invDet;
+  }
+}
 
 void calculateHomography(R2Image * thisImage, R2Image * otherImage, int numFeaturePoints, double acceptThreshold, std::vector<Point> &points, std::unordered_map<int,Point> &matchedPoints, double * bestH) {
 
@@ -898,11 +958,10 @@ void calculateHomography(R2Image * thisImage, R2Image * otherImage, int numFeatu
     for (int i = 0; i < numFeaturePoints; i++) {
       if (matchedPoints.count(subset[i]) > 0) {
         Point p = points[subset[i]];
-        double w = H[6] * p.x + H[7] * p.y + H[8];
-        int x = rounddtoi((H[0] * p.x + H[1] * p.y + H[2]) / w);
-        int y = rounddtoi((H[3] * p.x + H[4] * p.y + H[5]) / w);
-        if (abs(x - matchedPoints[subset[i]].x) <= acceptThreshold
-         && abs(y - matchedPoints[subset[i]].y) <= acceptThreshold) {
+        double newp[2];
+        applyH(H, p, newp);
+        if (abs(newp[0] - matchedPoints[subset[i]].x) <= acceptThreshold
+         && abs(newp[1] - matchedPoints[subset[i]].y) <= acceptThreshold) {
            numMatches ++;
          }
       }
@@ -993,13 +1052,60 @@ blendOtherImageTranslated(R2Image * otherImage)
 	fprintf(stderr, "fit other image using translation and blend imageB over imageA\n");
 	return;
 }
-
+double max4 (double a, double b, double c, double d) {
+  return std::max(std::max(std::max(a, b), c), d);
+}
 void R2Image::
 blendOtherImageHomography(R2Image * otherImage)
 {
 	// find at least 100 features on this image, and another 100 on the "otherImage". Based on these,
 	// compute the matching homography, and blend the transformed "otherImage" into this image with a 50% opacity.
-	fprintf(stderr, "fit other image using a homography and blend imageB over imageA\n");
+
+  const int numFeaturePoints = 100;
+  const double acceptThreshold = 3; // pixels
+  double H[9];
+  double HInverse[9];
+
+  std::vector<Point> points(numFeaturePoints);
+  std::unordered_map<int, Point> matchedPoints(numFeaturePoints);
+  calculateHomography(this, otherImage, numFeaturePoints, acceptThreshold, points, matchedPoints, H);
+  invertH(H, HInverse);
+  R2Pixel black (0,0,0,1);
+  R2Image blended(width, height);
+
+  // Copy thisImage
+  for (int i = 0; i < width; i ++) {
+    for (int j = 0; j < height; j++) {
+      blended.SetPixel(i, j, Pixel(i,j) / 2);
+    }
+  }
+
+  // Add the Transformed image
+  for (int i = 0; i < width - 1; i ++) {
+    for (int j = 0; j < height -1; j++) {
+      Point p;
+      p.x = i;
+      p.y = j;
+      R2Pixel recreatedPixel(0,0,0,1);
+      double mappedP [2];
+      applyH(HInverse, p, mappedP);
+      if (mappedP[0] > 0 && mappedP [1] > 0 &&
+          mappedP[0] < width && mappedP[1] < height) {
+            int x = ((int) mappedP[0]);
+            int y = ((int) mappedP[1]);
+            double xweight = mappedP[0] - x;
+            double yweight = mappedP[1] - y;
+            recreatedPixel = ((2 - xweight - yweight) * otherImage->Pixel(i, j)) +
+                             ((1 - yweight + xweight) * otherImage->Pixel(i+1, j)) +
+                             ((1 - xweight + yweight) * otherImage->Pixel(i, j+1)) +
+                             ((xweight + yweight) * otherImage->Pixel(i+1, j+1));
+            recreatedPixel /= 4;
+          }
+      blended.SetPixel(i,j, blended.Pixel(i,j) + (recreatedPixel / 2));
+    }
+  }
+
+  *this = blended;
 	return;
 }
 
