@@ -937,7 +937,7 @@ void invertH(double *H, double * HInverse) {
 void calculateHomography(R2Image * thisImage, R2Image * otherImage, int numFeaturePoints, double acceptThreshold, std::vector<Point> &points, std::unordered_map<int,Point> &matchedPoints, double * bestH) {
 
   track(thisImage, otherImage, numFeaturePoints, points, matchedPoints);
-  *thisImage = *otherImage;
+  //*thisImage = *otherImage;
 
   const int numIterations = 100;
   const int numSubsetPoints = 4;
@@ -1061,8 +1061,8 @@ blendOtherImageHomography(R2Image * otherImage)
 	// find at least 100 features on this image, and another 100 on the "otherImage". Based on these,
 	// compute the matching homography, and blend the transformed "otherImage" into this image with a 50% opacity.
 
-  const int numFeaturePoints = 100;
-  const double acceptThreshold = 3; // pixels
+  const int numFeaturePoints = 50;
+  const double acceptThreshold = 5; // pixels
   double H[9];
   double HInverse[9];
 
@@ -1071,34 +1071,33 @@ blendOtherImageHomography(R2Image * otherImage)
   calculateHomography(this, otherImage, numFeaturePoints, acceptThreshold, points, matchedPoints, H);
   invertH(H, HInverse);
   R2Pixel black (0,0,0,1);
-  R2Image blended(width, height);
+  int ox = width / 5;
+  int oy = height / 5;
+  R2Image blended(width + ox + ox, height + oy + oy);
 
   // Copy thisImage
   for (int i = 0; i < width; i ++) {
     for (int j = 0; j < height; j++) {
-      blended.SetPixel(i, j, Pixel(i,j) / 2);
+      blended.SetPixel(i + ox, j + oy, otherImage->Pixel(i,j) / 2);
     }
   }
 
   // Add the Transformed image
-  for (int i = 0; i < width - 1; i ++) {
-    for (int j = 0; j < height -1; j++) {
-      Point p;
-      p.x = i;
-      p.y = j;
+  for (int i = 0; i < blended.width - 1; i ++) {
+    for (int j = 0; j < blended.height -1; j++) {
       R2Pixel recreatedPixel(0,0,0,1);
       double mappedP [2];
-      applyH(HInverse, p, mappedP);
+      applyH(HInverse, i - ox, j - oy, mappedP);
       if (mappedP[0] > 0 && mappedP [1] > 0 &&
           mappedP[0] < width && mappedP[1] < height) {
             int x = ((int) mappedP[0]);
             int y = ((int) mappedP[1]);
             double xweight = mappedP[0] - x;
             double yweight = mappedP[1] - y;
-            recreatedPixel = ((2 - xweight - yweight) * otherImage->Pixel(i, j)) +
-                             ((1 - yweight + xweight) * otherImage->Pixel(i+1, j)) +
-                             ((1 - xweight + yweight) * otherImage->Pixel(i, j+1)) +
-                             ((xweight + yweight) * otherImage->Pixel(i+1, j+1));
+            recreatedPixel = ((2 - xweight - yweight) * Pixel(x, y)) +
+                             ((1 - yweight + xweight) * Pixel(x+1, y)) +
+                             ((1 - xweight + yweight) * Pixel(x, y+1)) +
+                             ((xweight + yweight) * Pixel(x+1, y+1));
             recreatedPixel /= 4;
           }
       blended.SetPixel(i,j, blended.Pixel(i,j) + (recreatedPixel / 2));
