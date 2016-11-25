@@ -1062,7 +1062,7 @@ blendOtherImageHomography(R2Image * otherImage)
 	// compute the matching homography, and blend the transformed "otherImage" into this image with a 50% opacity.
 
   const int numFeaturePoints = 50;
-  const double acceptThreshold = 5; // pixels
+  const double acceptThreshold = 3; // pixels
   double H[9];
   double HInverse[9];
 
@@ -1089,7 +1089,7 @@ blendOtherImageHomography(R2Image * otherImage)
       double mappedP [2];
       applyH(HInverse, i - ox, j - oy, mappedP);
       if (mappedP[0] > 0 && mappedP [1] > 0 &&
-          mappedP[0] < width && mappedP[1] < height) {
+          mappedP[0] < width - 1 && mappedP[1] < height - 1) {
             int x = ((int) mappedP[0]);
             int y = ((int) mappedP[1]);
             double xweight = mappedP[0] - x;
